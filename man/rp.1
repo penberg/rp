@@ -1,0 +1,235 @@
+.TH RP 1 "2026-03-22" "rp 0.1.0" "User Commands"
+.SH NAME
+rp \- repair programs
+.SH SYNOPSIS
+.B rp
+.I command
+.RI [ options ]
+.br
+.B rp
+.B init
+.br
+.B rp
+.B inspect
+[
+.B --verbose
+]
+.I prompt
+.br
+.B rp
+.B check
+.br
+.B rp
+.B fix
+.br
+.B rp
+.B config
+.RI [ subcommand ]
+.SH DESCRIPTION
+.B rp
+is a local-first CLI for turning bug reports into repository-local reproducers
+and fixes.
+It is built around a small workflow:
+.IP "1." 4
+Initialize repository metadata with
+.BR "rp init" .
+.IP "2." 4
+Inspect a bug report and materialize a local reproducer with
+.BR "rp inspect" .
+.IP "3." 4
+Run the current reproducer with
+.BR "rp check" .
+.IP "4." 4
+Invoke a coding agent to fix the current issue with
+.BR "rp fix" .
+.PP
+The repository contract is stored in
+.BR .rp.yml .
+Local runtime state is stored under
+.BR .rp/ .
+.SH COMMANDS
+.SS init
+Initialize repository metadata in the current directory.
+.PP
+This writes
+.BR .rp.yml .
+The generated file defines the repository verification command and, when
+recognized, repository-native test roots.
+.SS inspect
+Inspect a bug report and create local issue state under
+.BR .rp/issues/ .
+.PP
+The
+.I prompt
+may be a GitHub issue URL, an issue number, or free-form text.
+.PP
+The command invokes the configured coding agent in non-interactive mode and
+expects a structured result containing:
+.IP \(bu 2
+a summary
+.IP \(bu 2
+inspection notes
+.IP \(bu 2
+a local reproducer script
+.PP
+Typical files written under
+.BR .rp/issues/\fIid\fR/ :
+.IP \(bu 2
+.B SOURCE.txt
+.IP \(bu 2
+.B SUMMARY.txt
+.IP \(bu 2
+.B inspect.md
+.IP \(bu 2
+.B reproducer.sh
+.IP \(bu 2
+.B status
+.SS check
+Run the current issue reproducer.
+.PP
+This command finds the active issue under
+.BR .rp/issues/ ,
+runs
+.BR reproducer.sh ,
+captures stdout and stderr, and writes:
+.IP \(bu 2
+.B check.stdout
+.IP \(bu 2
+.B check.stderr
+.IP \(bu 2
+.B check.status
+.PP
+Current verdicts are:
+.IP \(bu 2
+.B reproduced
+\- reproducer exited with status 1
+.IP \(bu 2
+.B not_reproduced
+\- reproducer exited with status 0
+.IP \(bu 2
+.B broken_reproducer
+\- reproducer exited with another status or by signal
+.SS fix
+Fix the current issue in the tree.
+.PP
+This command:
+.IP \(bu 2
+finds the active issue under
+.BR .rp/issues/
+.IP \(bu 2
+reads the inspection artifacts
+.IP \(bu 2
+invokes the configured coding agent in non-interactive mode
+.IP \(bu 2
+reruns the reproducer through
+.BR "rp check"
+.PP
+If
+.B tests:
+is configured in
+.BR .rp.yml ,
+.B rp fix
+also requires a repository-native regression test change under one of the
+configured test roots.
+.SS config
+Manage local configuration stored in
+.BR .rp/config .
+.PP
+Supported subcommands are:
+.TP
+.B config
+Equivalent to
+.BR "config list" .
+.TP
+.B config list
+List effective local configuration values in
+.B key=value
+format.
+.TP
+.BI "config get " key
+Print a single effective configuration value.
+.TP
+.BI "config set " key " " value
+Write a local configuration value.
+.SH FILES
+.TP
+.B .rp.yml
+Shared repository metadata.
+.TP
+.B .rp/config
+Local repository configuration.
+.TP
+.B .rp/issues/
+Local issue state and reproducer artifacts.
+.SH CONFIGURATION
+The repository metadata file uses a small YAML format.
+.PP
+Minimal example:
+.PP
+.nf
+version: 1
+
+verify-cmd: make test
+.fi
+.PP
+Example with repository-native tests:
+.PP
+.nf
+version: 1
+
+verify-cmd: make test
+
+tests:
+  - testing/conformance
+
+guidance: |
+  Prefer adding a minimal regression test under testing/conformance.
+  Choose the most specific suite for the bug, and update the suite Makefile when needed.
+.fi
+.PP
+The
+.B tests:
+entry is repository-specific.
+The
+.B testing/conformance
+path shown above is only an example.
+.SH EXAMPLES
+Initialize a repository:
+.PP
+.nf
+rp init
+.fi
+.PP
+Select a local coding agent:
+.PP
+.nf
+rp config set agent codex
+.fi
+.PP
+Inspect a GitHub issue:
+.PP
+.nf
+rp inspect https://github.com/OWNER/REPO/issues/123
+.fi
+.PP
+Run the reproducer:
+.PP
+.nf
+rp check
+.fi
+.PP
+Attempt a fix:
+.PP
+.nf
+rp fix
+.fi
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Failure.
+.SH SEE ALSO
+.BR git (1),
+.BR sh (1)

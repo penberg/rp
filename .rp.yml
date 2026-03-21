@@ -1,0 +1,3 @@
+version: 1
+
+verify-cmd: make test

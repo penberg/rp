@@ -1,0 +1,18 @@
+[package]
+name = "rp"
+version = "0.0.0"
+edition = "2024"
+repository = "https://github.com/penberg/rp"
+
+[[bin]]
+name = "rp"
+path = "main.rs"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+
+[dependencies]
+clap = { version = "4.5.38", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
