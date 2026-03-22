@@ -4,6 +4,12 @@
 
 AI coding agents are versatile, but reproducing and fixing bugs requires structure to keep them on track. `rp` provides that structure. Use `rp inspect <prompt>` to analyze a GitHub issue or local test failure and generate a reproducer. Then run `rp fix` to automatically patch it — powered by your AI coding agent of choice.
 
+## Installation
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/penberg/rp/releases/latest/download/rp-installer.sh | sh
+```
+
 ## Getting Started
 
 Initialize the repository:
