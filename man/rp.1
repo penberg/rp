@@ -93,13 +93,16 @@ or uses the explicitly selected issue when you pass one such as
 .BR "rp check 9" ,
 runs
 .BR reproducer.sh ,
-captures stdout and stderr, and writes:
+captures stdout and stderr, prints a short summary, and writes:
 .IP \(bu 2
 .B check.stdout
 .IP \(bu 2
 .B check.stderr
 .IP \(bu 2
 .B check.status
+.PP
+If the reproducer is broken, the captured output is also shown inline to
+make the failure easier to diagnose.
 .PP
 Current verdicts are:
 .IP \(bu 2

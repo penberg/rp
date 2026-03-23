@@ -193,6 +193,8 @@ Responsibilities:
 - find the active issue under `.rp/issues/`, or use the explicitly selected issue
 - run `reproducer.sh`
 - capture stdout, stderr, and exit code
+- print a concise summary and show artifact locations
+- print captured reproducer output inline when the reproducer is broken
 - write `check.stdout`, `check.stderr`, and `check.status`
 - update `status`
 

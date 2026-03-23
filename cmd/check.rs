@@ -51,17 +51,15 @@ pub fn run_check(issue_dir: &Path) -> Result<CheckResult, String> {
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let exit_code = output.status.code();
     let verdict = verdict_for(exit_code);
+    let stdout_path = issue_dir.join("check.stdout");
+    let stderr_path = issue_dir.join("check.stderr");
+    let status_path = issue_dir.join("check.status");
 
     write_check_artifacts(issue_dir, &stdout, &stderr, exit_code, &verdict)
         .map_err(|err| format!("failed to write check artifacts: {err}"))?;
 
-    println!("check: verdict {verdict}");
-    if let Some(code) = exit_code {
-        println!("check: exit code {code}");
-    } else {
-        println!("check: exit code signal");
-    }
-    println!("check: wrote {}", issue_dir.join("check.status").display());
+    print_summary(&verdict, exit_code, &stdout_path, &stderr_path, &status_path);
+    print_reproducer_output(&stdout, &stderr, &verdict);
 
     Ok(CheckResult { verdict })
 }
@@ -71,6 +69,51 @@ fn verdict_for(exit_code: Option<i32>) -> String {
         Some(1) => String::from("reproduced"),
         Some(0) => String::from("not_reproduced"),
         Some(_) | None => String::from("broken_reproducer"),
+    }
+}
+
+fn print_summary(
+    verdict: &str,
+    exit_code: Option<i32>,
+    stdout_path: &Path,
+    stderr_path: &Path,
+    status_path: &Path,
+) {
+    let exit = exit_code
+        .map(|code| code.to_string())
+        .unwrap_or_else(|| String::from("signal"));
+
+    match verdict {
+        "reproduced" => println!("check: reproduced (exit {exit})"),
+        "not_reproduced" => println!("check: not reproduced (exit {exit})"),
+        "broken_reproducer" => println!("check: broken reproducer (exit {exit})"),
+        other => println!("check: verdict {other} (exit {exit})"),
+    }
+
+    println!("check: stdout {}", stdout_path.display());
+    println!("check: stderr {}", stderr_path.display());
+    println!("check: status {}", status_path.display());
+}
+
+fn print_reproducer_output(stdout: &str, stderr: &str, verdict: &str) {
+    if verdict != "broken_reproducer" {
+        return;
+    }
+
+    if !stderr.trim().is_empty() {
+        eprintln!("check: reproducer stderr:");
+        eprint!("{stderr}");
+        if !stderr.ends_with('\n') {
+            eprintln!();
+        }
+    }
+
+    if !stdout.trim().is_empty() {
+        eprintln!("check: reproducer stdout:");
+        eprint!("{stdout}");
+        if !stdout.ends_with('\n') {
+            eprintln!();
+        }
     }
 }
 
