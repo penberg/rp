@@ -1,0 +1,6 @@
+check: issue 9
+check: reproducer .rp/issues/9/reproducer.sh
+check: running reproducer
+check: verdict reproduced
+check: exit code 1
+check: wrote .rp/issues/9/check.status

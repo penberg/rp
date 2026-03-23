@@ -186,11 +186,11 @@ With `--verbose`, `inspect` streams backend activity in a readable form while th
 
 ### `rp check`
 
-Run the current issue reproducer.
+Run the current issue reproducer. Pass an optional issue id to select a specific issue, for example `rp check 9`.
 
 Responsibilities:
 
-- find the active issue under `.rp/issues/`
+- find the active issue under `.rp/issues/`, or use the explicitly selected issue
 - run `reproducer.sh`
 - capture stdout, stderr, and exit code
 - write `check.stdout`, `check.stderr`, and `check.status`
