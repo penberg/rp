@@ -1,0 +1,2 @@
+check: reproducer stderr:
+boom

@@ -1,7 +1,7 @@
 check: issue 9
 check: reproducer .rp/issues/9/reproducer.sh
 check: running reproducer
-check: reproduced (exit 1)
+check: broken reproducer (exit 2)
 check: stdout .rp/issues/9/check.stdout
 check: stderr .rp/issues/9/check.stderr
 check: status .rp/issues/9/check.status
