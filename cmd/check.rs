@@ -58,7 +58,13 @@ pub fn run_check(issue_dir: &Path) -> Result<CheckResult, String> {
     write_check_artifacts(issue_dir, &stdout, &stderr, exit_code, &verdict)
         .map_err(|err| format!("failed to write check artifacts: {err}"))?;
 
-    print_summary(&verdict, exit_code, &stdout_path, &stderr_path, &status_path);
+    print_summary(
+        &verdict,
+        exit_code,
+        &stdout_path,
+        &stderr_path,
+        &status_path,
+    );
     print_reproducer_output(&stdout, &stderr, &verdict);
 
     Ok(CheckResult { verdict })

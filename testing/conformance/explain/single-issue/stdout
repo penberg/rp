@@ -1,0 +1,14 @@
+Issue: 9
+
+Summary:
+The sqlite test runner fails on the first shared-cache case.
+
+Explanation:
+First failing test
+The reproducer runs the SQLite all.test harness and stops at the first failure.
+
+Query
+SELECT * FROM t5 ORDER BY +2;
+
+That failure appears in the shared-cache setup, which suggests the local tree is
+missing a behavior needed by that mode.

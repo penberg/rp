@@ -20,9 +20,9 @@ enum Commands {
     /// Initialize rp manifest
     Init,
     /// Run the current issue reproducer
-    Check {
-        issue: Option<String>,
-    },
+    Check { issue: Option<String> },
+    /// Explain the current issue in human terms
+    Explain { issue: Option<String> },
     /// Fix the current issue in the tree
     Fix,
     /// Inspect a bug report and materialize a local reproducer workspace
@@ -44,6 +44,7 @@ fn main() -> ExitCode {
     match cli.command {
         Commands::Init => cmd::init::run(),
         Commands::Check { issue } => cmd::check::run(issue.as_deref()),
+        Commands::Explain { issue } => cmd::explain::run(issue.as_deref()),
         Commands::Fix => cmd::fix::run(),
         Commands::Inspect { verbose, prompt } => cmd::inspect::run(&prompt, verbose),
         Commands::Config { command } => cmd::config::run(command),

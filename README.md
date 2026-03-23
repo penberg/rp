@@ -40,6 +40,12 @@ rp inspect https://github.com/OWNER/REPO/issues/123
 
 The important output is a reproducer that `rp fix` can run later without talking to GitHub again.
 
+Explain the current issue in human terms:
+
+```bash
+rp explain
+```
+
 Check the current failure:
 
 ```bash

@@ -17,6 +17,10 @@ rp \- repair programs
 .I prompt
 .br
 .B rp
+.B explain
+.RI [ issue ]
+.br
+.B rp
 .B check
 .br
 .B rp
@@ -37,9 +41,12 @@ Initialize repository metadata with
 Inspect a bug report and materialize a local reproducer with
 .BR "rp inspect" .
 .IP "3." 4
+Read the saved explanation with
+.BR "rp explain" .
+.IP "4." 4
 Run the current reproducer with
 .BR "rp check" .
-.IP "4." 4
+.IP "5." 4
 Invoke a coding agent to fix the current issue with
 .BR "rp fix" .
 .PP
@@ -68,7 +75,7 @@ expects a structured result containing:
 .IP \(bu 2
 a summary
 .IP \(bu 2
-inspection notes
+a saved explanation
 .IP \(bu 2
 a local reproducer script
 .PP
@@ -79,11 +86,19 @@ Typical files written under
 .IP \(bu 2
 .B SUMMARY.txt
 .IP \(bu 2
-.B inspect.md
+.B EXPLANATION.md
 .IP \(bu 2
 .B reproducer.sh
 .IP \(bu 2
 .B status
+.SS explain
+Print the saved human explanation for the current issue.
+.PP
+This command finds the active issue under
+.BR .rp/issues/ ,
+or uses the explicitly selected issue when you pass one such as
+.BR "rp explain 9" ,
+then prints the saved summary and explanation.
 .SS check
 Run the current issue reproducer.
 .PP
@@ -122,7 +137,7 @@ This command:
 finds the active issue under
 .BR .rp/issues/
 .IP \(bu 2
-reads the inspection artifacts
+reads the saved explanation and reproducer artifacts
 .IP \(bu 2
 invokes the configured coding agent in non-interactive mode
 .IP \(bu 2
@@ -215,6 +230,12 @@ Inspect a GitHub issue:
 .PP
 .nf
 rp inspect https://github.com/OWNER/REPO/issues/123
+.fi
+.PP
+Read the saved explanation:
+.PP
+.nf
+rp explain
 .fi
 .PP
 Run the reproducer:

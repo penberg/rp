@@ -9,6 +9,7 @@
 ```text
 rp init
 rp inspect [--verbose] <prompt>
+rp explain [issue]
 rp check
 rp fix
 rp config
@@ -25,9 +26,11 @@ rp config set <key> <value>
    Create the shared repo manifest.
 2. `rp inspect`
    Turn a bug report into a local reproducer under `.rp/issues/`.
-3. `rp check`
+3. `rp explain`
+   Re-read the saved issue explanation in human terms.
+4. `rp check`
    Run that reproducer and record the result.
-4. `rp fix`
+5. `rp fix`
    Invoke the configured coding agent to change the repository until the reproducer stops failing.
 
 The important split is:
@@ -98,8 +101,8 @@ Typical contents:
   Original inspect input
 - `SUMMARY.txt`
   Condensed issue summary
-- `inspect.md`
-  Derived inspection notes
+- `EXPLANATION.md`
+  Saved human explanation of the issue
 - `reproducer.sh`
   Local reproducer
 - `status`
@@ -180,9 +183,19 @@ Responsibilities:
 
 - create `.rp/issues/<id>/`
 - invoke the configured agent in non-interactive mode
-- write a candidate reproducer and inspection notes
+- write a candidate reproducer and saved explanation
 
 With `--verbose`, `inspect` streams backend activity in a readable form while the agent works.
+
+### `rp explain`
+
+Print the saved human explanation for the current issue. Pass an optional issue id to select a specific issue, for example `rp explain 9`.
+
+Responsibilities:
+
+- find the active issue under `.rp/issues/`, or use the explicitly selected issue
+- read `SUMMARY.txt`
+- read `EXPLANATION.md`
 
 ### `rp check`
 
@@ -214,7 +227,7 @@ Fix the current issue in the tree.
 Responsibilities:
 
 - find the active issue under `.rp/issues/`
-- read the inspection artifacts
+- read the issue explanation and reproducer artifacts
 - invoke the configured agent in non-interactive mode
 - require a repo-native regression test when `tests:` is configured
 - run the reproducer again through `rp check`
@@ -255,6 +268,7 @@ Typical workflow:
 rp init
 rp config set agent codex
 rp inspect https://github.com/OWNER/REPO/issues/123
+rp explain
 rp check
 rp fix
 ```
