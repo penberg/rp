@@ -1,4 +1,4 @@
-use crate::config::active_issue_dir;
+use crate::issues::resolve_issue_dir;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitCode};
@@ -7,8 +7,8 @@ pub struct CheckResult {
     pub verdict: String,
 }
 
-pub fn run() -> ExitCode {
-    let result = match run_active_check() {
+pub fn run(issue: Option<&str>) -> ExitCode {
+    let result = match run_check_for(issue) {
         Ok(result) => result,
         Err(err) => {
             eprintln!("error: {err}");
@@ -22,8 +22,8 @@ pub fn run() -> ExitCode {
     }
 }
 
-pub fn run_active_check() -> Result<CheckResult, String> {
-    let issue_dir = active_issue_dir()?;
+pub fn run_check_for(issue: Option<&str>) -> Result<CheckResult, String> {
+    let issue_dir = resolve_issue_dir(issue)?;
     run_check(&issue_dir)
 }
 

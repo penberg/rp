@@ -1,5 +1,6 @@
 use crate::agent;
-use crate::config::{ISSUES_DIR, effective_agent};
+use crate::config::effective_agent;
+use crate::issues::ISSUES_DIR;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

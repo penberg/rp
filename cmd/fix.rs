@@ -1,6 +1,7 @@
 use crate::agent;
 use crate::cmd::check;
-use crate::config::{active_issue_dir, test_integration_config};
+use crate::config::test_integration_config;
+use crate::issues::active_issue_dir;
 use std::collections::BTreeSet;
 use std::process::Command;
 use std::process::ExitCode;
