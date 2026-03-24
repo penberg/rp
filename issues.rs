@@ -49,10 +49,34 @@ fn issue_dir(issue: &str) -> Result<PathBuf, String> {
         return Err(format!("missing issues directory {}", issues_dir.display()));
     }
 
-    let issue_dir = issues_dir.join(issue);
-    if !issue_dir.is_dir() {
-        return Err(format!("issue {} not found in {}", issue, issues_dir.display()));
+    let exact_dir = issues_dir.join(issue);
+    if exact_dir.is_dir() {
+        return Ok(exact_dir);
     }
 
-    Ok(issue_dir)
+    let matches = fs::read_dir(issues_dir)
+        .map_err(|err| format!("failed to read {}: {err}", issues_dir.display()))?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with(issue))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    match matches.len() {
+        0 => Err(format!("issue {} not found in {}", issue, issues_dir.display())),
+        1 => Ok(matches.into_iter().next().unwrap()),
+        _ => {
+            let names = matches
+                .iter()
+                .filter_map(|path| path.file_name().and_then(|name| name.to_str()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(format!("issue {} is ambiguous in {}: {}", issue, issues_dir.display(), names))
+        }
+    }
 }
