@@ -205,7 +205,20 @@ pub fn test_integration_config() -> Result<TestIntegrationConfig, std::io::Error
         }
     }
 
+    validate_test_integration_config(&config)?;
+
     Ok(config)
+}
+
+fn validate_test_integration_config(config: &TestIntegrationConfig) -> Result<(), std::io::Error> {
+    if config.roots.is_empty() && config.guidance.is_some() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "guidance requires tests: to declare repo-native test roots",
+        ));
+    }
+
+    Ok(())
 }
 
 fn command_exists(command: &str) -> bool {
