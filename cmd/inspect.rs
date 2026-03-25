@@ -43,7 +43,7 @@ pub fn run(prompt: &str, verbose: bool) -> ExitCode {
     let files = [
         ("SOURCE.txt", format!("{prompt}\n")),
         ("SUMMARY.txt", format!("{}\n", inspect.summary)),
-        ("inspect.md", inspect.inspect_markdown),
+        ("EXPLANATION.md", inspect.explanation_markdown),
         ("reproducer.sh", inspect.reproducer_script),
         ("status", String::from("inspected\n")),
     ];

@@ -51,7 +51,11 @@ fn issue_dir(issue: &str) -> Result<PathBuf, String> {
 
     let issue_dir = issues_dir.join(issue);
     if !issue_dir.is_dir() {
-        return Err(format!("issue {} not found in {}", issue, issues_dir.display()));
+        return Err(format!(
+            "issue {} not found in {}",
+            issue,
+            issues_dir.display()
+        ));
     }
 
     Ok(issue_dir)

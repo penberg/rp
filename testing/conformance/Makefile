@@ -1,4 +1,5 @@
 SUITES += check
+SUITES += explain
 
 test:
 	@for suite in $(SUITES); do \

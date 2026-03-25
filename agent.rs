@@ -12,17 +12,17 @@ const TRIAGE_SCHEMA: &str = r#"{
   "type": "object",
   "properties": {
     "summary": { "type": "string" },
-    "inspect_markdown": { "type": "string" },
+    "explanation_markdown": { "type": "string" },
     "reproducer_script": { "type": "string" }
   },
-  "required": ["summary", "inspect_markdown", "reproducer_script"],
+  "required": ["summary", "explanation_markdown", "reproducer_script"],
   "additionalProperties": false
 }"#;
 
 #[derive(Deserialize)]
 pub struct InspectResult {
     pub summary: String,
-    pub inspect_markdown: String,
+    pub explanation_markdown: String,
     pub reproducer_script: String,
 }
 
@@ -69,9 +69,9 @@ fn inspect_prompt(source: &str) -> String {
     format!(
         "You are generating a deterministic local bug reproducer for a repository.\n\
 Return JSON only. Do not wrap it in Markdown.\n\
-The JSON must have exactly these string keys: summary, inspect_markdown, reproducer_script.\n\
+The JSON must have exactly these string keys: summary, explanation_markdown, reproducer_script.\n\
 The reproducer_script must be a complete POSIX sh script that exits non-zero while the bug is present.\n\
-The inspect_markdown should explain the reasoning and any assumptions.\n\
+The explanation_markdown should explain the issue in human terms, including the reasoning and any assumptions.\n\
 Use the repository in the current working directory as context.\n\
 If the source is a GitHub issue URL, inspect it and derive a concrete local reproducer.\n\
 If exact reproduction is impossible, produce the closest deterministic reproducer you can and explain the gap.\n\
@@ -84,10 +84,7 @@ Source:\n\
 fn fix_prompt(issue_dir: &Path) -> Result<String, String> {
     let source = read_optional(issue_dir.join("SOURCE.txt"))?;
     let summary = read_optional(issue_dir.join("SUMMARY.txt"))?;
-    let inspect = read_optional_fallback(
-        &[issue_dir.join("inspect.md"), issue_dir.join("triage.md")],
-        "issue analysis",
-    )?;
+    let inspect = read_optional(issue_dir.join("EXPLANATION.md"))?;
     let verify_cmd = crate::config::verify_command()
         .map_err(|err| format!("failed to read {}: {err}", crate::config::CONFIG_PATH))?;
     let test_integration = crate::config::test_integration_config()
@@ -150,16 +147,6 @@ Triage notes:\n{}\n",
 
 fn read_optional(path: std::path::PathBuf) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|err| format!("failed to read {}: {err}", path.display()))
-}
-
-fn read_optional_fallback(paths: &[std::path::PathBuf], label: &str) -> Result<String, String> {
-    for path in paths {
-        if path.is_file() {
-            return read_optional(path.clone());
-        }
-    }
-
-    Err(format!("failed to read {label}: no matching file found"))
 }
 
 fn run_claude_fix(repo_root: &Path, prompt: &str) -> Result<String, String> {
