@@ -1,5 +1,5 @@
 use crate::config::effective_agent;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::io::{BufRead, BufReader};
@@ -19,7 +19,7 @@ const TRIAGE_SCHEMA: &str = r#"{
   "additionalProperties": false
 }"#;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct InspectResult {
     pub summary: String,
     pub explanation_markdown: String,
@@ -194,28 +194,16 @@ fn run_claude_inspect(
     command
         .current_dir(repo_root)
         .arg("-p")
-        .arg("--dangerously-skip-permissions");
+        .arg("--dangerously-skip-permissions")
+        .arg("--verbose")
+        .arg("--output-format")
+        .arg("stream-json")
+        .arg("--include-partial-messages");
 
-    if options.verbose {
-        command
-            .arg("--output-format")
-            .arg("stream-json")
-            .arg("--include-partial-messages")
-            .arg("--verbose")
-            .arg(prompt);
+    command.arg(prompt);
 
-        let output = run_command(&mut command, "claude", options)?;
-        extract_claude_stream_result(&output)
-    } else {
-        command
-            .arg("--output-format")
-            .arg("json")
-            .arg("--json-schema")
-            .arg(TRIAGE_SCHEMA)
-            .arg(prompt);
-
-        run_command(&mut command, "claude", options)
-    }
+    let output = run_command(&mut command, "claude", options)?;
+    extract_claude_inspect_result(&output)
 }
 
 fn run_codex_inspect(
@@ -505,16 +493,8 @@ fn parse_inspect_result(output: &str) -> Result<InspectResult, serde_json::Error
     let trimmed = output.trim();
 
     if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-        if let Some(structured_output) = value.get("structured_output") {
-            if let Ok(result) = serde_json::from_value::<InspectResult>(structured_output.clone()) {
-                return Ok(result);
-            }
-        }
-
-        if let Some(result_text) = value.get("result").and_then(Value::as_str) {
-            if let Ok(result) = serde_json::from_str::<InspectResult>(result_text) {
-                return Ok(result);
-            }
+        if let Some(result) = find_inspect_result_in_value(&value) {
+            return Ok(result);
         }
     }
 
@@ -532,8 +512,8 @@ fn parse_inspect_result(output: &str) -> Result<InspectResult, serde_json::Error
     serde_json::from_str(trimmed)
 }
 
-fn extract_claude_stream_result(output: &str) -> Result<String, String> {
-    let mut last_text: Option<String> = None;
+fn extract_claude_inspect_result(output: &str) -> Result<String, String> {
+    let mut text = String::new();
 
     for line in output
         .lines()
@@ -545,16 +525,58 @@ fn extract_claude_stream_result(output: &str) -> Result<String, String> {
             Err(_) => continue,
         };
 
-        if let Some(result) = value.get("result").and_then(Value::as_str) {
-            return Ok(result.to_string());
+        if let Some(result) = find_inspect_result_in_value(&value) {
+            return serde_json::to_string(&result)
+                .map_err(|err| format!("failed to serialize Claude inspect result: {err}"));
         }
 
-        if let Some(text) = extract_claude_text(&value) {
-            last_text = Some(text);
+        if let Some(delta_text) = extract_claude_delta_text(&value) {
+            text.push_str(&delta_text);
+            if let Ok(result) = parse_inspect_result(&text) {
+                return serde_json::to_string(&result)
+                    .map_err(|err| format!("failed to serialize Claude inspect result: {err}"));
+            }
+        }
+
+        if let Some(message_text) = extract_claude_text(&value) {
+            text.push_str(&message_text);
+            if let Ok(result) = parse_inspect_result(&text) {
+                return serde_json::to_string(&result)
+                    .map_err(|err| format!("failed to serialize Claude inspect result: {err}"));
+            }
         }
     }
 
-    last_text.ok_or_else(|| "failed to extract final result from Claude stream output".to_string())
+    if let Ok(result) = parse_inspect_result(&text) {
+        return serde_json::to_string(&result)
+            .map_err(|err| format!("failed to serialize Claude inspect result: {err}"));
+    }
+
+    Err("failed to extract structured inspect result from Claude stream output".to_string())
+}
+
+fn find_inspect_result_in_value(value: &Value) -> Option<InspectResult> {
+    serde_json::from_value::<InspectResult>(value.clone())
+        .ok()
+        .or_else(|| {
+            value
+                .get("structured_output")
+                .and_then(|structured_output| {
+                    serde_json::from_value::<InspectResult>(structured_output.clone()).ok()
+                })
+        })
+        .or_else(|| {
+            value
+                .get("result")
+                .and_then(Value::as_str)
+                .and_then(|result_text| parse_inspect_result(result_text).ok())
+        })
+        .or_else(|| extract_claude_text(value).and_then(|text| parse_inspect_result(&text).ok()))
+        .or_else(|| match value {
+            Value::Array(items) => items.iter().find_map(find_inspect_result_in_value),
+            Value::Object(map) => map.values().find_map(find_inspect_result_in_value),
+            _ => None,
+        })
 }
 
 fn extract_claude_text(value: &Value) -> Option<String> {
@@ -593,4 +615,72 @@ fn extract_claude_text(value: &Value) -> Option<String> {
     }
 
     None
+}
+
+fn extract_claude_delta_text(value: &Value) -> Option<String> {
+    value
+        .get("event")
+        .and_then(|event| event.get("delta"))
+        .and_then(|delta| match delta.get("type").and_then(Value::as_str) {
+            Some("text_delta") => delta
+                .get("text")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+            Some("thinking_delta") => delta
+                .get("thinking")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+            _ => None,
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_claude_inspect_result, parse_inspect_result};
+
+    #[test]
+    fn parse_inspect_result_from_nested_structured_output() {
+        let output = r##"{"type":"result","structured_output":{"summary":"first failure","explanation_markdown":"details","reproducer_script":"#!/bin/sh\nexit 1\n"}}"##;
+        let result = parse_inspect_result(output).expect("expected inspect result");
+
+        assert_eq!(result.summary, "first failure");
+        assert_eq!(result.explanation_markdown, "details");
+        assert_eq!(result.reproducer_script, "#!/bin/sh\nexit 1\n");
+    }
+
+    #[test]
+    fn extract_claude_inspect_result_from_streamed_text_deltas() {
+        let stream = concat!(
+            r##"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"{\"summary\":\"first failure\","}}}"##,
+            "\n",
+            r##"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"\"explanation_markdown\":\"details\","}}}"##,
+            "\n",
+            r##"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"\"reproducer_script\":\"#!/bin/sh\\nexit 1\\n\"}"}}}"##,
+            "\n",
+            r##"{"type":"result","subtype":"success","result":"Background task complete"}"##
+        );
+
+        let result = extract_claude_inspect_result(stream).expect("expected extracted result");
+        let parsed = parse_inspect_result(&result).expect("expected parseable result");
+
+        assert_eq!(parsed.summary, "first failure");
+        assert_eq!(parsed.explanation_markdown, "details");
+        assert_eq!(parsed.reproducer_script, "#!/bin/sh\nexit 1\n");
+    }
+
+    #[test]
+    fn extract_claude_inspect_result_ignores_plaintext_final_result() {
+        let stream = concat!(
+            r##"{"type":"assistant","message":{"content":[{"type":"text","text":"{\"summary\":\"first failure\",\"explanation_markdown\":\"details\",\"reproducer_script\":\"#!/bin/sh\\nexit 1\\n\"}"}]}}"##,
+            "\n",
+            r##"{"type":"result","subtype":"success","result":"The background task confirmed the same failure — the reproducer and analysis are already complete above."}"##
+        );
+
+        let result = extract_claude_inspect_result(stream).expect("expected extracted result");
+        let parsed = parse_inspect_result(&result).expect("expected parseable result");
+
+        assert_eq!(parsed.summary, "first failure");
+        assert_eq!(parsed.explanation_markdown, "details");
+        assert_eq!(parsed.reproducer_script, "#!/bin/sh\nexit 1\n");
+    }
 }
