@@ -21,6 +21,8 @@ enum Commands {
     Init,
     /// Run the current issue reproducer
     Check { issue: Option<String> },
+    /// Commit the current tracked diff with an agent-written message
+    Commit,
     /// Explain the current issue in human terms
     Explain { issue: Option<String> },
     /// Fix the current issue in the tree
@@ -44,6 +46,7 @@ fn main() -> ExitCode {
     match cli.command {
         Commands::Init => cmd::init::run(),
         Commands::Check { issue } => cmd::check::run(issue.as_deref()),
+        Commands::Commit => cmd::commit::run(),
         Commands::Explain { issue } => cmd::explain::run(issue.as_deref()),
         Commands::Fix => cmd::fix::run(),
         Commands::Inspect { verbose, prompt } => cmd::inspect::run(&prompt, verbose),

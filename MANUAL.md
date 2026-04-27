@@ -220,6 +220,19 @@ Current verdicts are:
 - `broken_reproducer`
   reproducer exited with some other code or by signal
 
+### `rp commit`
+
+Commit the current tracked diff with an agent-written commit message.
+
+Responsibilities:
+
+- read the current diff against `HEAD`
+- include the saved active issue summary and explanation when available
+- invoke the configured agent in non-interactive mode
+- run `git commit -am` with the generated message
+
+`rp commit` also includes untracked files in the prompt context so the generated message can describe them, but like `git commit -a` it does not add untracked files to the commit.
+
 ### `rp fix`
 
 Fix the current issue in the tree.

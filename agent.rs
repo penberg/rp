@@ -30,6 +30,12 @@ pub struct InspectOptions {
     pub verbose: bool,
 }
 
+pub struct IssueContext {
+    pub issue_name: String,
+    pub summary: String,
+    pub explanation: String,
+}
+
 pub fn inspect(
     repo_root: &Path,
     source: &str,
@@ -63,6 +69,29 @@ pub fn fix(repo_root: &Path, issue_dir: &Path) -> Result<String, String> {
         "opencode" => run_opencode_fix(repo_root, &prompt),
         other => Err(format!("unsupported agent: {other}")),
     }
+}
+
+pub fn commit_message(
+    repo_root: &Path,
+    issue_context: Option<&IssueContext>,
+    diff: &str,
+) -> Result<String, String> {
+    let agent = effective_agent().map_err(|err| err.to_string())?;
+    let prompt = commit_prompt(issue_context, diff);
+
+    let output = match agent.as_str() {
+        "claude" => run_claude_commit_message(repo_root, &prompt)?,
+        "codex" => run_codex_commit_message(repo_root, &prompt)?,
+        "opencode" => run_opencode_commit_message(repo_root, &prompt)?,
+        other => return Err(format!("unsupported agent: {other}")),
+    };
+
+    let message = normalize_commit_message(&output)?;
+    if message.is_empty() {
+        return Err("agent returned an empty commit message".to_string());
+    }
+
+    Ok(message)
 }
 
 fn inspect_prompt(source: &str) -> String {
@@ -145,6 +174,35 @@ Triage notes:\n{}\n",
     ))
 }
 
+fn commit_prompt(issue_context: Option<&IssueContext>, diff: &str) -> String {
+    let issue_block = match issue_context {
+        Some(context) => format!(
+            "Active issue: {}\n\
+Issue summary:\n{}\n\
+\n\
+Saved explanation:\n{}\n\
+\n",
+            context.issue_name,
+            context.summary.trim(),
+            context.explanation.trim(),
+        ),
+        None => String::from("No saved rp issue context is available.\n\n"),
+    };
+
+    format!(
+        "You are writing a git commit message for the current repository state.\n\
+Return only the commit message text. Do not use Markdown fences or commentary.\n\
+The first line must be a concise subject in imperative mood, ideally 72 characters or fewer.\n\
+Add a blank line and a short body when the rationale is important.\n\
+Use the active rp issue context when it helps explain the change.\n\
+\n\
+{}\n\
+Diff against HEAD:\n\
+{}\n",
+        issue_block, diff
+    )
+}
+
 fn read_optional(path: std::path::PathBuf) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|err| format!("failed to read {}: {err}", path.display()))
 }
@@ -175,6 +233,42 @@ fn run_codex_fix(repo_root: &Path, prompt: &str) -> Result<String, String> {
 }
 
 fn run_opencode_fix(repo_root: &Path, prompt: &str) -> Result<String, String> {
+    run_command(
+        Command::new("opencode")
+            .current_dir(repo_root)
+            .arg("run")
+            .arg(prompt),
+        "opencode",
+        &InspectOptions { verbose: false },
+    )
+}
+
+fn run_claude_commit_message(repo_root: &Path, prompt: &str) -> Result<String, String> {
+    run_command(
+        Command::new("claude")
+            .current_dir(repo_root)
+            .arg("-p")
+            .arg("--dangerously-skip-permissions")
+            .arg(prompt),
+        "claude",
+        &InspectOptions { verbose: false },
+    )
+}
+
+fn run_codex_commit_message(repo_root: &Path, prompt: &str) -> Result<String, String> {
+    run_command(
+        Command::new("codex")
+            .current_dir(repo_root)
+            .arg("exec")
+            .arg("--dangerously-bypass-approvals-and-sandbox")
+            .arg("--skip-git-repo-check")
+            .arg(prompt),
+        "codex",
+        &InspectOptions { verbose: false },
+    )
+}
+
+fn run_opencode_commit_message(repo_root: &Path, prompt: &str) -> Result<String, String> {
     run_command(
         Command::new("opencode")
             .current_dir(repo_root)
@@ -485,6 +579,45 @@ fn truncate_for_log(text: &str, max_chars: usize) -> String {
     result
 }
 
+fn normalize_commit_message(output: &str) -> Result<String, String> {
+    let trimmed = output.trim();
+    if trimmed.is_empty() {
+        return Ok(String::new());
+    }
+
+    let stripped = if let Some(body) = trimmed
+        .strip_prefix("```")
+        .and_then(|value| value.rsplit_once("```").map(|(body, _)| body))
+    {
+        if let Some((_, rest)) = body.split_once('\n') {
+            rest.trim()
+        } else {
+            body.trim()
+        }
+    } else {
+        trimmed
+    };
+
+    let message = stripped
+        .lines()
+        .skip_while(|line| {
+            let trimmed = line.trim();
+            trimmed.is_empty()
+                || trimmed == "Commit message:"
+                || trimmed == "Suggested commit message:"
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string();
+
+    if message.contains('\0') {
+        return Err("agent returned an invalid commit message".to_string());
+    }
+
+    Ok(message)
+}
+
 fn parse_inspect_result(output: &str) -> Result<InspectResult, serde_json::Error> {
     if let Ok(result) = serde_json::from_str(output) {
         return Ok(result);
@@ -636,7 +769,11 @@ fn extract_claude_delta_text(value: &Value) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_claude_inspect_result, parse_inspect_result};
+    use super::{
+        commit_prompt, extract_claude_inspect_result, normalize_commit_message,
+        parse_inspect_result,
+    };
+    use crate::agent::IssueContext;
 
     #[test]
     fn parse_inspect_result_from_nested_structured_output() {
@@ -682,5 +819,34 @@ mod tests {
         assert_eq!(parsed.summary, "first failure");
         assert_eq!(parsed.explanation_markdown, "details");
         assert_eq!(parsed.reproducer_script, "#!/bin/sh\nexit 1\n");
+    }
+
+    #[test]
+    fn commit_prompt_includes_issue_context() {
+        let prompt = commit_prompt(
+            Some(&IssueContext {
+                issue_name: "123".to_string(),
+                summary: "parser panics".to_string(),
+                explanation: "The parser indexes past the end of the token list.".to_string(),
+            }),
+            "diff --git a/src/main.rs b/src/main.rs",
+        );
+
+        assert!(prompt.contains("Active issue: 123"));
+        assert!(prompt.contains("parser panics"));
+        assert!(prompt.contains("Diff against HEAD:"));
+    }
+
+    #[test]
+    fn normalize_commit_message_strips_fences_and_label() {
+        let message = normalize_commit_message(
+            "```text\nSuggested commit message:\nFix parser bounds check\n\nAvoid indexing past the final token.\n```",
+        )
+        .expect("expected commit message");
+
+        assert_eq!(
+            message,
+            "Fix parser bounds check\n\nAvoid indexing past the final token."
+        );
     }
 }

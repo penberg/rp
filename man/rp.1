@@ -24,6 +24,9 @@ rp \- repair programs
 .B check
 .br
 .B rp
+.B commit
+.br
+.B rp
 .B fix
 .br
 .B rp
@@ -47,6 +50,9 @@ Read the saved explanation with
 Run the current reproducer with
 .BR "rp check" .
 .IP "5." 4
+Write a commit message and commit the current tracked diff with
+.BR "rp commit" .
+.IP "6." 4
 Invoke a coding agent to fix the current issue with
 .BR "rp fix" .
 .PP
@@ -129,6 +135,19 @@ Current verdicts are:
 .IP \(bu 2
 .B broken_reproducer
 \- reproducer exited with another status or by signal
+.SS commit
+Commit the current tracked diff with an agent-written message.
+.PP
+This command reads the diff against
+.BR HEAD ,
+includes the active
+.B rp
+issue summary and explanation when available, invokes the configured coding
+agent in non-interactive mode, and runs
+.BR "git commit -am" .
+.PP
+Untracked files are shown to the agent as context for message generation, but
+they are not added to the commit.
 .SS fix
 Fix the current issue in the tree.
 .PP

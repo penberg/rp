@@ -52,6 +52,12 @@ Check the current failure:
 rp check
 ```
 
+Commit the current tracked changes with an agent-written message:
+
+```bash
+rp commit
+```
+
 Fix the current failure:
 
 ```bash
